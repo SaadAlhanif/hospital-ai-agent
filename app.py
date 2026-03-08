@@ -6,7 +6,7 @@ from tools import create_appointment
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("Clinic AI Assistant")
+st.title("Hospital Agentic AI")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
