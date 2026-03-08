@@ -10,55 +10,81 @@ from tools import create_appointment, get_available_doctors, tools_schema
 init_db()
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# إعداد الصفحة لتكون من اليمين لليسار (RTL)
-st.set_page_config(page_title="مساعد المستشفى الذكي", layout="wide", page_icon="🏥")
+st.set_page_config(page_title="واتساب المستشفى الذكي", layout="wide", page_icon="🟢")
 
-# 4. واجهة المستخدم
-st.markdown("<h1 style='text-align: right;'>🏥 نظام مساعد المستشفى الذكي</h1>", unsafe_allow_html=True)
+# --- 2. إضافة تنسيق WhatsApp عبر CSS ---
+st.markdown("""
+    <style>
+    .stChatMessage {
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+        max-width: 80%;
+    }
+    /* رسائل المستخدم (جهة اليمين باللون الأخضر فاتح) */
+    [data-testid="stChatMessageUser"] {
+        background-color: #dcf8c6 !important;
+        margin-left: auto;
+        border: 1px solid #c7e5b4;
+    }
+    /* رسائل البوت (جهة اليسار باللون الأبيض) */
+    [data-testid="stChatMessageAssistant"] {
+        background-color: #ffffff !important;
+        margin-right: auto;
+        border: 1px solid #e6e6e6;
+    }
+    /* تحسين شكل التبويبات */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #075e54;
+        color: white;
+        border-radius: 10px 10px 0px 0px;
+        padding: 10px 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# تقسيم الصفحة إلى تبويبات (بوابة المريض ولوحة الإدارة)
-tab1, tab2 = st.tabs(["💬 بوابة المريض", "🔐 لوحة الإدارة"])
+# 3. العناوين
+st.markdown("<h2 style='text-align: center; color: #075e54;'>🟢 WhatsApp Hospital Assistant</h2>", unsafe_allow_html=True)
+
+tab1, tab2 = st.tabs(["💬 المحادثة (WhatsApp)", "🔐 لوحة الإدارة"])
 
 with tab1:
-    # --- عرض الأطباء بشكل افتراضي ---
-    st.markdown("<h3 style='text-align: right;'>👨‍⚕️ طاقمنا الطبي المتميز</h3>", unsafe_allow_html=True)
-    
+    # عرض الأطباء بشكل أنيق في الأعلى
+    st.markdown("<h5 style='text-align: right;'>👨‍⚕️ الأطباء المتاحون الآن:</h5>", unsafe_allow_html=True)
     conn = sqlite3.connect("hospital.db")
-    doctors_df = pd.read_sql_query("SELECT name, specialty, availability FROM doctors", conn)
+    doctors_df = pd.read_sql_query("SELECT name, specialty FROM doctors", conn)
     conn.close()
-
-    # عرض الأطباء في أعمدة
-    cols = st.columns(len(doctors_df))
-    for i, row in doctors_df.iterrows():
-        with cols[i]:
-            st.info(f"**{row['name']}**")
-            st.write(f"التخصص: {row['specialty']}")
-            st.caption(f"ساعات العمل: {row['availability']}")
     
+    # عرض سريع للأطباء في سطر واحد
+    doc_list = " | ".join([f"**{row['name']}** ({row['specialty']})" for i, row in doctors_df.iterrows()])
+    st.write(doc_list)
     st.divider()
-    
-    # --- واجهة المحادثة ---
-    st.markdown("<h3 style='text-align: right;'>تحدث مع المساعد الذكي لحجز موعد</h3>", unsafe_allow_html=True)
-    
+
+    # --- منطق الدردشة ---
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "system", "content": "أنت مساعد ذكي في مستشفى. ساعد المرضى في حجز المواعيد مع الأطباء المذكورين أعلاه. تحدث باللغة العربية بأسلوب مهذب."}
+            {"role": "system", "content": "أنت مساعد مستشفى ذكي تعمل عبر واتساب. ساعد المرضى بلغة عربية ودودة ومختصرة مثل رسائل الجوال."}
         ]
 
-    # عرض تاريخ المحادثة
+    # عرض تاريخ المحادثة بتنسيق الفقاعات
     for msg in st.session_state.messages:
         if msg["role"] in ["user", "assistant"]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-    user_input = st.chat_input("كيف يمكنني مساعدتك اليوم؟ (مثلاً: أريد حجز موعد مع دكتور أحمد)")
+    user_input = st.chat_input("اكتب رسالتك هنا...")
 
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.write(user_input)
 
-        # منطق العميل الذكي (Agent Logic)
+        # Agent Logic
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=st.session_state.messages,
@@ -73,16 +99,8 @@ with tab1:
                 func_name = tool_call.function.name
                 args = json.loads(tool_call.function.arguments)
                 
-                # تنفيذ المهام
                 if func_name == "create_appointment":
-                    # تعديل بسيط لضمان تمرير الأسماء الصحيحة للدالة باللغة العربية
-                    result = create_appointment(
-                        patient_name=args.get("patient_name"),
-                        doctor_name=args.get("doctor_name"),
-                        date=args.get("date"),
-                        time=args.get("time"),
-                        reason=args.get("reason")
-                    )
+                    result = create_appointment(**args)
                 elif func_name == "get_available_doctors":
                     result = str(doctors_df.to_dict())
                 
@@ -93,7 +111,6 @@ with tab1:
                     "content": result
                 })
 
-            # الرد النهائي من الذكاء الاصطناعي
             final_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=st.session_state.messages
@@ -107,15 +124,9 @@ with tab1:
             st.write(reply)
 
 with tab2:
-    st.markdown("<h2 style='text-align: right;'>دخول الإدارة</h2>", unsafe_allow_html=True)
-    pwd = st.text_input("أدخل كلمة مرور المسؤول", type="password")
+    st.markdown("<h3 style='text-align: right;'>دخول المسؤول</h3>", unsafe_allow_html=True)
+    pwd = st.text_input("كلمة المرور", type="password")
     if pwd == "saad2026":
         conn = sqlite3.connect("hospital.db")
-        st.subheader("📅 قائمة جميع المواعيد")
-        df_appointments = pd.read_sql_query("SELECT * FROM appointments", conn)
-        # تغيير أسماء الأعمدة للعربية في العرض فقط
-        df_appointments.columns = ["المعرف", "اسم المريض", "اسم الدكتور", "التاريخ", "الوقت", "السبب"]
-        st.dataframe(df_appointments, use_container_width=True)
+        st.dataframe(pd.read_sql_query("SELECT * FROM appointments", conn), use_container_width=True)
         conn.close()
-    else:
-        st.warning("هذا القسم مخصص للمسؤولين فقط.")
