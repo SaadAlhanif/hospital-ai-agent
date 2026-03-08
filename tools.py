@@ -1,6 +1,16 @@
 import sqlite3
 
+def get_available_doctors():
+    """هذه الدالة تجلب قائمة الأطباء من قاعدة البيانات"""
+    conn = sqlite3.connect("hospital.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, specialty, availability FROM doctors")
+    doctors = cursor.fetchall()
+    conn.close()
+    return str(doctors)
+
 def create_appointment(patient_name, doctor_name, date, time, reason):
+    """هذه الدالة تقوم بحجز الموعد"""
     try:
         conn = sqlite3.connect("hospital.db", check_same_thread=False)
         cursor = conn.cursor()
@@ -14,8 +24,16 @@ def create_appointment(patient_name, doctor_name, date, time, reason):
     except Exception as e:
         return f"حدث خطأ أثناء الحجز: {str(e)}"
 
-# هذا الهيكل يخبر OpenAI كيف يستخدم الدوال
+# هيكل الأدوات لـ OpenAI
 tools_schema = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_available_doctors",
+            "description": "استخدم هذه الدالة لمعرفة أسماء الأطباء وتخصصاتهم المتاحة في المستشفى.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -24,11 +42,11 @@ tools_schema = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_name": {"type": "string", "description": "اسم المريض الثنائي أو الثلاثي"},
-                    "doctor_name": {"type": "string", "description": "اسم الطبيب المختار"},
-                    "date": {"type": "string", "description": "التاريخ بصيغة YYYY-MM-DD"},
-                    "time": {"type": "string", "description": "الوقت المطلوب"},
-                    "reason": {"type": "string", "description": "سبب الزيارة"}
+                    "patient_name": {"type": "string"},
+                    "doctor_name": {"type": "string"},
+                    "date": {"type": "string"},
+                    "time": {"type": "string"},
+                    "reason": {"type": "string"}
                 },
                 "required": ["patient_name", "doctor_name", "date", "time", "reason"]
             }
