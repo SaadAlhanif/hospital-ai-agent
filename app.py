@@ -10,7 +10,7 @@ from tools import create_appointment, tools_schema
 init_db()
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.set_page_config(page_title="مساعد مستشفى PSAU", layout="centered")
+st.set_page_config(page_title="مساعد مستشفى", layout="centered")
 
 # تنسيق CSS للمحادثة والعربية وضمان بقاء الإدخال في الأسفل
 st.markdown("""
@@ -20,7 +20,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🏥 مساعد مستشفى PSAU الذكي")
+st.title("🏥 مساعد مستشفى الذكي")
 
 tab1, tab2 = st.tabs(["💬 حجز موعد", "🔐 الإدارة"])
 
