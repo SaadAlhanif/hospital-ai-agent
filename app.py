@@ -6,127 +6,114 @@ import pandas as pd
 from database import init_db
 from tools import create_appointment, get_available_doctors, tools_schema
 
-# 1. إعدادات النظام
+# 1. إعدادات النظام الأساسية
 init_db()
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.set_page_config(page_title="واتساب المستشفى الذكي", layout="wide", page_icon="🟢")
+st.set_page_config(page_title="مساعد المستشفى الذكي", layout="centered", page_icon="🏥")
 
-# --- 2. إضافة تنسيق WhatsApp عبر CSS ---
+# --- تنسيق الواجهة لتكون محادثة احترافية ---
 st.markdown("""
     <style>
-    .stChatMessage {
-        border-radius: 15px;
-        padding: 10px;
-        margin-bottom: 10px;
-        max-width: 80%;
+    /* تنسيق الحاوية الرئيسية للمحادثة */
+    .stChatFloatingInputContainer {
+        bottom: 20px;
     }
-    /* رسائل المستخدم (جهة اليمين باللون الأخضر فاتح) */
-    [data-testid="stChatMessageUser"] {
-        background-color: #dcf8c6 !important;
-        margin-left: auto;
-        border: 1px solid #c7e5b4;
+    /* محاذاة النصوص للعربية */
+    div[data-testid="stChatMessageContent"] p {
+        text-align: right;
+        direction: rtl;
     }
-    /* رسائل البوت (جهة اليسار باللون الأبيض) */
-    [data-testid="stChatMessageAssistant"] {
-        background-color: #ffffff !important;
-        margin-right: auto;
-        border: 1px solid #e6e6e6;
-    }
-    /* تحسين شكل التبويبات */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 20px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #075e54;
-        color: white;
-        border-radius: 10px 10px 0px 0px;
-        padding: 10px 20px;
-    }
+    /* إخفاء القوائم غير الضرورية لزيادة التركيز */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# 3. العناوين
-st.markdown("<h2 style='text-align: center; color: #075e54;'>🟢 WhatsApp Hospital Assistant</h2>", unsafe_allow_html=True)
+# العنوان العلوي
+st.markdown("<h2 style='text-align: center;'>🏥 نظام حجز المواعيد الذكي</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>تحدث مع المساعد الآلي لحجز موعدك مع أطباء مستشفى PSAU</p>", unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["💬 المحادثة (WhatsApp)", "🔐 لوحة الإدارة"])
+# تقسيم الشاشة لتبويبات (المحادثة هي الأساس)
+tab1, tab2 = st.tabs(["💬 حجز موعد جديد", "🔐 لوحة الإدارة"])
 
 with tab1:
-    # عرض الأطباء بشكل أنيق في الأعلى
-    st.markdown("<h5 style='text-align: right;'>👨‍⚕️ الأطباء المتاحون الآن:</h5>", unsafe_allow_html=True)
-    conn = sqlite3.connect("hospital.db")
-    doctors_df = pd.read_sql_query("SELECT name, specialty FROM doctors", conn)
-    conn.close()
-    
-    # عرض سريع للأطباء في سطر واحد
-    doc_list = " | ".join([f"**{row['name']}** ({row['specialty']})" for i, row in doctors_df.iterrows()])
-    st.write(doc_list)
-    st.divider()
-
-    # --- منطق الدردشة ---
+    # تهيئة سجل المحادثة
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "system", "content": "أنت مساعد مستشفى ذكي تعمل عبر واتساب. ساعد المرضى بلغة عربية ودودة ومختصرة مثل رسائل الجوال."}
+            {"role": "system", "content": "أنت مساعد مستشفى ذكي ومؤدب. ساعد المرضى في اختيار الطبيب المناسب وحجز الموعد. تحدث بالعربية الفصحى أو البيضاء."}
         ]
 
-    # عرض تاريخ المحادثة بتنسيق الفقاعات
+    # عرض الأطباء بشكل مختصر جداً في البداية كمرجع
+    with st.expander("👨‍⚕️ استعراض الأطباء المتاحين"):
+        conn = sqlite3.connect("hospital.db")
+        docs = pd.read_sql_query("SELECT name, specialty, availability FROM doctors", conn)
+        st.table(docs)
+        conn.close()
+
+    # عرض فقاعات المحادثة
     for msg in st.session_state.messages:
         if msg["role"] in ["user", "assistant"]:
             with st.chat_message(msg["role"]):
-                st.write(msg["content"])
+                st.markdown(msg["content"])
 
-    user_input = st.chat_input("اكتب رسالتك هنا...")
-
-    if user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
+    # مدخل الشات (Chat Input)
+    if prompt := st.chat_input("أريد حجز موعد مع..."):
+        # 1. إضافة رسالة المستخدم وعرضها
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.write(user_input)
+            st.markdown(prompt)
 
-        # Agent Logic
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=st.session_state.messages,
-            tools=tools_schema
-        )
-        
-        response_message = response.choices[0].message
-        
-        if response_message.tool_calls:
-            st.session_state.messages.append(response_message)
-            for tool_call in response_message.tool_calls:
-                func_name = tool_call.function.name
-                args = json.loads(tool_call.function.arguments)
-                
-                if func_name == "create_appointment":
-                    result = create_appointment(**args)
-                elif func_name == "get_available_doctors":
-                    result = str(doctors_df.to_dict())
-                
-                st.session_state.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": func_name,
-                    "content": result
-                })
-
-            final_response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=st.session_state.messages
-            )
-            reply = final_response.choices[0].message.content
-        else:
-            reply = response_message.content
-
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+        # 2. استجابة العميل الذكي (Agent Response)
         with st.chat_message("assistant"):
-            st.write(reply)
+            response_placeholder = st.empty() # مكان لكتابة الرد أثناء المعالجة
+            
+            # طلب الرد من OpenAI
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=st.session_state.messages,
+                tools=tools_schema
+            )
+            
+            response_message = response.choices[0].message
+            
+            # معالجة استدعاء الدوال (إن وجدت)
+            if response_message.tool_calls:
+                st.session_state.messages.append(response_message)
+                for tool_call in response_message.tool_calls:
+                    func_name = tool_call.function.name
+                    args = json.loads(tool_call.function.arguments)
+                    
+                    if func_name == "create_appointment":
+                        result = create_appointment(**args)
+                    elif func_name == "get_available_doctors":
+                        result = str(docs.to_dict())
+                    
+                    st.session_state.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": func_name,
+                        "content": result
+                    })
+
+                # الحصول على الرد النهائي بعد تنفيذ المهمة
+                final_response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=st.session_state.messages
+                )
+                reply = final_response.choices[0].message.content
+            else:
+                reply = response_message.content
+
+            # عرض الرد النهائي وتخزينه
+            response_placeholder.markdown(reply)
+            st.session_state.messages.append({"role": "assistant", "content": reply})
 
 with tab2:
-    st.markdown("<h3 style='text-align: right;'>دخول المسؤول</h3>", unsafe_allow_html=True)
-    pwd = st.text_input("كلمة المرور", type="password")
-    if pwd == "saad2026":
+    st.markdown("<h3 style='text-align: right;'>قسم الإدارة</h3>", unsafe_allow_html=True)
+    admin_pwd = st.text_input("أدخل كلمة المرور للعرض", type="password")
+    if admin_pwd == "saad2026":
         conn = sqlite3.connect("hospital.db")
+        st.write("### قائمة المواعيد المسجلة")
         st.dataframe(pd.read_sql_query("SELECT * FROM appointments", conn), use_container_width=True)
         conn.close()
