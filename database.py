@@ -26,7 +26,7 @@ def init_db():
     )
     """)
 
-    # إضافة أطباء تجريبيين إذا كان الجدول فارغاً
+    # إضافة الأطباء إذا كان الجدول فارغاً
     cursor.execute("SELECT COUNT(*) FROM doctors")
     if cursor.fetchone()[0] == 0:
         doctors = [
