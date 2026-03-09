@@ -4,7 +4,6 @@ def init_db():
     conn = sqlite3.connect("hospital.db", check_same_thread=False)
     cursor = conn.cursor()
     
-    # إنشاء جدول الأطباء
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,7 +13,6 @@ def init_db():
     )
     """)
 
-    # إنشاء جدول المواعيد
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS appointments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +24,6 @@ def init_db():
     )
     """)
 
-    # إضافة الأطباء إذا كان الجدول فارغاً
     cursor.execute("SELECT COUNT(*) FROM doctors")
     if cursor.fetchone()[0] == 0:
         doctors = [
